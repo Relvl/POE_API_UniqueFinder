@@ -28,4 +28,5 @@ public class UniqueFinderSettings : ISettings
 
 
     public List<string> UniqueNames = [];
+    public bool Initialized = false;
 }

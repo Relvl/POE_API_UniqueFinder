@@ -54,6 +54,12 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
     {
         GameController.UnderPanel.WantUse(() => Settings.Enable);
         Mapping();
+        if (Settings.UniqueNames.Count == 0 && !Settings.Initialized)
+        {
+            Settings.UniqueNames.Add("Mageblood");
+            Settings.UniqueNames.Add("Headhunter");
+        }
+
         return true;
     }
 
