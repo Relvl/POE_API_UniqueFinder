@@ -4,3 +4,4 @@ A plugin for ExileApi, than can highlight desired unidentified items like Headhi
 
 That items should be displayed in your lootfilter!
 
+![preview-1](https://raw.githubusercontent.com/Relvl/POE_API_UniqueFinder/master/Preview/2024-01-11_07-46-20.png)
