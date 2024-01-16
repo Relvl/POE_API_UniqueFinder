@@ -109,13 +109,23 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
         if (summary.Count <= 0) return;
 
         var panelPosition = GameController.UnderPanel.StartDrawPoint.ToVector2Num();
-        panelPosition.X -= 20f; // todo settings? this is shift from the right
+        var align = Settings.Panel.AlignLeft ? FontAlign.Left : FontAlign.Right;
+        if (panelPosition.X <= 0)
+        {
+            // In case of broken game window offsets...
+            align = FontAlign.Left;
+            panelPosition = new Vector2(Settings.Panel.Margin, 200);
+        }
+        else
+        {
+            panelPosition.X -= Settings.Panel.Margin;
+        }
 
         foreach (var item in summary)
         {
             if (Settings.Panel.Enabled && (!Settings.Panel.Blink || _blinkTrigger) && InGameUi?.OpenRightPanel.IsVisible != true)
             {
-                var height = DrawItemIncremented(panelPosition, item);
+                var height = DrawItemIncremented(panelPosition, item, align);
                 panelPosition.Y += height;
             }
 
@@ -138,14 +148,17 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
         base.Render();
     }
 
-    private float DrawItemIncremented(Vector2 position, GroundItemInstance item)
+    private float DrawItemIncremented(Vector2 position, GroundItemInstance item, FontAlign align = FontAlign.Right)
     {
         position += _borederOffset;
         var baseTextSize = Graphics.MeasureText(item.ItemName);
         var textSize = baseTextSize * Settings.Panel.TextSize;
         var fullWidth = textSize.X + 10 * Settings.Panel.TextSize;
         var textHeightWithPadding = textSize.Y + 4;
-        var boxRect = new RectangleF(position.X - fullWidth, position.Y, fullWidth, textHeightWithPadding);
+
+        position.X = align == FontAlign.Left ? position.X : position.X - fullWidth;
+
+        var boxRect = new RectangleF(position.X, position.Y, fullWidth, textHeightWithPadding);
         Graphics.DrawBox(boxRect, item.BackgroundColor);
 
         // Borders
@@ -155,8 +168,8 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
 
         using (Graphics.SetTextScale(Settings.Panel.TextSize))
         {
-            var textPos = position + new Vector2(-5, textHeightWithPadding / 2 - textSize.Y / 2);
-            Graphics.DrawText(item.ItemName, textPos, item.TextColor, FontAlign.Right);
+            var textPos = position + new Vector2(align == FontAlign.Right ? -5 : 5, textHeightWithPadding / 2 - textSize.Y / 2);
+            Graphics.DrawText(item.ItemName, textPos, item.TextColor, align);
         }
 
         return textHeightWithPadding + 1;

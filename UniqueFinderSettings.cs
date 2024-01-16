@@ -49,6 +49,8 @@ public class Panel
     public ToggleNode Enabled { get; set; } = new(true);
     public ToggleNode Blink { get; set; } = new(true);
     public RangeNode<int> TextSize { get; set; } = new(2, 1, 20);
+    public RangeNode<int> Margin { get; set; } = new(20, 0, 200);
+    public ToggleNode AlignLeft { get; set; } = new(false);
 }
 
 [Submenu(CollapsedByDefault = true)]
