@@ -11,13 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExileCore">
-      <HintPath>..\..\ExileCore.dll</HintPath>
-    </Reference>
-    <Reference Include="GameOffsets">
-      <HintPath>..\..\GameOffsets.dll</HintPath>
-    </Reference>
-    <Reference Include="ItemFilterLibrary">
-      <HintPath>..\..\ItemFilterLibrary.dll</HintPath>
+      <HintPath>..\..\..\ExileCore.dll</HintPath>
     </Reference>
   </ItemGroup>
 </Project>

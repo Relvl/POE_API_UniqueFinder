@@ -22,7 +22,7 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
     private readonly Stopwatch _blinkTimer = Stopwatch.StartNew();
     private HashSet<GroundItemInstance> _filteredLabelsOnGround = [];
     private readonly Vector2 _borederOffset = new(-1, 1);
-    private bool _blinkTrigger = false;
+    private bool _blinkTrigger;
 
     private Element? LargeMap => GameController?.IngameState?.IngameUi?.Map?.LargeMap;
     private IngameUIElements? InGameUi => GameController?.Game?.IngameState?.IngameUi;
@@ -65,7 +65,7 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
 
     public override Job Tick()
     {
-        if (_timer.ElapsedMilliseconds <= Settings.UpdateTimer) return base.Tick();
+        if (_timer.ElapsedMilliseconds <= Settings.Common.UpdateTime) return base.Tick();
         if (LabelsOnGround.Count == 0) return base.Tick();
         if (GameController?.Files is null) return base.Tick();
 
@@ -77,6 +77,7 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
             worldItem.ItemEntity.TryGetComponent<Mods>(out var itemMods);
             if (itemMods is null) continue;
             if (itemMods.ItemRarity != ItemRarity.Unique) continue;
+            if (Settings.Common.HideIdentified && itemMods.Identified) continue;
             worldItem.ItemEntity.TryGetComponent<RenderItem>(out var renderItem);
             if (renderItem is null) continue;
             var itemName = Mapping().GetValueOrDefault(renderItem.ResourcePath)?.Where(i => !i.StartsWith("Replica")).FirstOrDefault();
@@ -98,7 +99,7 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
         if (InGameUi.FullscreenPanels.Any(p => p.IsVisible)) return;
         if (GameController.Player?.GridPosNum is null) return;
 
-        if (_blinkTimer.ElapsedMilliseconds >= Settings.BlinkFrequency)
+        if (_blinkTimer.ElapsedMilliseconds >= Settings.Common.BlinkTime)
         {
             _blinkTimer.Restart();
             _blinkTrigger = !_blinkTrigger;
@@ -107,33 +108,30 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
         var summary = _filteredLabelsOnGround.OrderBy(i => i.Distance).ToList();
         if (summary.Count <= 0) return;
 
-        var position = GameController.UnderPanel.StartDrawPoint.ToVector2Num();
-        position.X -= 20f; // todo settings? this is shift from the right
+        var panelPosition = GameController.UnderPanel.StartDrawPoint.ToVector2Num();
+        panelPosition.X -= 20f; // todo settings? this is shift from the right
 
         foreach (var item in summary)
         {
-            if (Settings.EnablePanelDrawing && (!Settings.BlinkPanelDrawing || _blinkTrigger) && !InGameUi.OpenRightPanel.IsVisible)
+            if (Settings.Panel.Enabled && (!Settings.Panel.Blink || _blinkTrigger) && InGameUi?.OpenRightPanel.IsVisible != true)
             {
-                var height = DrawItemIncremented(position, item);
-                position.Y += height;
+                var height = DrawItemIncremented(panelPosition, item);
+                panelPosition.Y += height;
             }
 
-            if (Settings.EnableMapDrawing && (!Settings.BlinkMapDrawing || _blinkTrigger))
+            if (Settings.LargeMap.Trace && (!Settings.LargeMap.Blink || _blinkTrigger) && LargeMap is not null && LargeMap.IsVisible)
             {
-                if (LargeMap is not null && LargeMap.IsVisible)
-                {
-                    var itemLocation = GameController.IngameState.Data.GetGridMapScreenPosition(item.Location);
-                    var playerLocation = GameController.IngameState.Data.GetGridMapScreenPosition(GameController.Player.GridPosNum);
-                    Graphics.DrawLine(itemLocation, playerLocation, Settings.MapLineThickness, Settings.MapLineColor);
-                }
+                var itemLocation = GameController.IngameState.Data.GetGridMapScreenPosition(item.Location);
+                var playerLocation = GameController.IngameState.Data.GetGridMapScreenPosition(GameController.Player.GridPosNum);
+                Graphics.DrawLine(itemLocation, playerLocation, Settings.LargeMap.Thickness, Settings.LargeMap.Color);
             }
 
-            if (item.Label.IsVisibleLocal && Settings.EnableItemOutline && _blinkTrigger)
+            if (item.Label.IsVisibleLocal && Settings.Label.Outline && (!Settings.Label.Blink || _blinkTrigger) && InGameUi?.OpenRightPanel.IsVisible != true)
             {
-                var thickness = 2;
+                const int thickness = 2;
                 var rect = item.Label.GetClientRect();
                 rect.Inflate(thickness / 2f, thickness / 2f);
-                Graphics.DrawFrame(rect, Color.Wheat, thickness);
+                Graphics.DrawFrame(rect, Settings.Label.FrameColor, thickness);
             }
         }
 
@@ -144,8 +142,8 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
     {
         position += _borederOffset;
         var baseTextSize = Graphics.MeasureText(item.ItemName);
-        var textSize = baseTextSize * Settings.TextSize;
-        var fullWidth = textSize.X + 10 * Settings.TextSize;
+        var textSize = baseTextSize * Settings.Panel.TextSize;
+        var fullWidth = textSize.X + 10 * Settings.Panel.TextSize;
         var textHeightWithPadding = textSize.Y + 4;
         var boxRect = new RectangleF(position.X - fullWidth, position.Y, fullWidth, textHeightWithPadding);
         Graphics.DrawBox(boxRect, item.BackgroundColor);
@@ -155,7 +153,7 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
         frameRect.Inflate(1, 1);
         Graphics.DrawFrame(frameRect, item.BorderColor, 1);
 
-        using (Graphics.SetTextScale(Settings.TextSize))
+        using (Graphics.SetTextScale(Settings.Panel.TextSize))
         {
             var textPos = position + new Vector2(-5, textHeightWithPadding / 2 - textSize.Y / 2);
             Graphics.DrawText(item.ItemName, textPos, item.TextColor, FontAlign.Right);

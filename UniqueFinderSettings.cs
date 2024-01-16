@@ -1,7 +1,10 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using ExileCore.Shared.Attributes;
 using ExileCore.Shared.Interfaces;
 using ExileCore.Shared.Nodes;
 using SharpDX;
+
+// ReSharper disable FieldCanBeMadeReadOnly.Global
 
 namespace UniqueFinder;
 
@@ -11,22 +14,47 @@ public class UniqueFinderSettings : ISettings
 {
     public ToggleNode Enable { get; set; } = new(false);
 
-    public RangeNode<int> UpdateTimer { get; set; } = new(250, 0, 5000);
+    [Menu("Common settings")]
+    public Common Common { get; set; } = new();
 
-    public ToggleNode EnablePanelDrawing { get; set; } = new(true);
-    public ToggleNode BlinkPanelDrawing { get; set; } = new(false);
-    public RangeNode<float> TextSize { get; set; } = new(2f, 1f, 20f);
+    public LargeMap LargeMap { get; set; } = new();
+    public Panel Panel { get; set; } = new();
+    public Label Label { get; set; } = new();
 
-    public ToggleNode EnableMapDrawing { get; set; } = new(true);
-    public ToggleNode BlinkMapDrawing { get; set; } = new(false);
-    public ToggleNode EnableItemOutline { get; set; } = new(true);
-    public ColorNode MapLineColor { get; set; } = new(new Color(214, 0, 255, 255));
-
-    public RangeNode<float> MapLineThickness { get; set; } = new(3f, 1f, 10f);
-    
-    public RangeNode<int> BlinkFrequency { get; set; } = new(250, 50, 2000);
-
+    public bool Initialized = false;
 
     public List<string> UniqueNames = [];
-    public bool Initialized = false;
+}
+
+[Submenu(CollapsedByDefault = true)]
+public class Common
+{
+    public RangeNode<int> UpdateTime { get; set; } = new(250, 10, 1000);
+    public RangeNode<int> BlinkTime { get; set; } = new(250, 10, 1000);
+    public ToggleNode HideIdentified { get; set; } = new(true);
+}
+
+[Submenu(CollapsedByDefault = true)]
+public class LargeMap
+{
+    public ToggleNode Trace { get; set; } = new(true);
+    public ToggleNode Blink { get; set; } = new(true);
+    public ColorNode Color { get; set; } = new(new Color(214, 0, 255, 255));
+    public RangeNode<float> Thickness { get; set; } = new(3f, 1f, 10f);
+}
+
+[Submenu(CollapsedByDefault = true)]
+public class Panel
+{
+    public ToggleNode Enabled { get; set; } = new(true);
+    public ToggleNode Blink { get; set; } = new(true);
+    public RangeNode<int> TextSize { get; set; } = new(2, 1, 20);
+}
+
+[Submenu(CollapsedByDefault = true)]
+public class Label
+{
+    public ToggleNode Outline { get; set; } = new(true);
+    public ToggleNode Blink { get; set; } = new(true);
+    public ColorNode FrameColor { get; set; } = new(Color.Wheat);
 }
