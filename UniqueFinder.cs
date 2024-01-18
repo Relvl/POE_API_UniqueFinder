@@ -55,6 +55,7 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
                     using var reader = new StreamReader(stream);
                     var content = reader.ReadToEnd();
                     ReadMapping(content);
+                    File.WriteAllText(customFilePath, content);
                 }
                 catch (Exception ex)
                 {
