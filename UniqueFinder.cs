@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Reflection;
 using ExileCore;
 using ExileCore.PoEMemory;
 using ExileCore.PoEMemory.Components;
@@ -35,19 +36,48 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
             var customFilePath = Path.Join(DirectoryFullName, CustomUniqueArtMappingPath);
             if (File.Exists(customFilePath))
             {
+                DebugWindow.LogMsg($"UniqueFinder: Read {CustomUniqueArtMappingPath} from file system");
+                ReadMapping(File.ReadAllText(customFilePath));
+            }
+            else
+            {
                 try
                 {
-                    _mapping = JsonConvert.DeserializeObject<Dictionary<string, List<string>>>(File.ReadAllText(customFilePath)) ??
-                               new Dictionary<string, List<string>>();
+                    using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"UniqueFinder.{CustomUniqueArtMappingPath}");
+                    if (stream is null)
+                    {
+                        LogError($"UniqueFinder: Assembly {CustomUniqueArtMappingPath} stream is null");
+                        _mapping = new Dictionary<string, List<string>>();
+                        return _mapping;
+                    }
+
+                    LogMsg($"UniqueFinder: Read {CustomUniqueArtMappingPath} from assembly...");
+                    using var reader = new StreamReader(stream);
+                    var content = reader.ReadToEnd();
+                    ReadMapping(content);
                 }
                 catch (Exception ex)
                 {
-                    LogError($"Unable to load art mapping: {ex}");
+                    LogError($"UniqueFinder: Unable to load embedded art mapping: {ex}");
+                    _mapping = new Dictionary<string, List<string>>();
+                    return _mapping;
                 }
             }
         }
 
         return _mapping;
+    }
+
+    private void ReadMapping(string source)
+    {
+        try
+        {
+            _mapping = JsonConvert.DeserializeObject<Dictionary<string, List<string>>>(source) ?? new Dictionary<string, List<string>>();
+        }
+        catch (Exception ex)
+        {
+            LogError($"UniqueFinder: Unable to load art mapping: {ex}");
+        }
     }
 
     public override bool Initialise()
@@ -203,6 +233,8 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
         ImGui.Spacing();
         ImGui.Spacing();
         ImGui.Spacing();
+
+        ImGui.Text($"Unique map loaded: {Mapping().Count}");
 
         base.DrawSettings();
     }
