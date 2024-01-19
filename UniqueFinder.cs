@@ -1,10 +1,12 @@
-﻿using System.Diagnostics;
+﻿using System.Collections;
+using System.Diagnostics;
 using System.Reflection;
 using ExileCore;
 using ExileCore.PoEMemory;
 using ExileCore.PoEMemory.Components;
 using ExileCore.PoEMemory.Elements;
 using ExileCore.PoEMemory.MemoryObjects;
+using ExileCore.Shared;
 using ExileCore.Shared.Enums;
 using ExileCore.Shared.Helpers;
 using ImGuiNET;
@@ -14,16 +16,18 @@ using Vector2 = System.Numerics.Vector2;
 
 namespace UniqueFinder;
 
+// ReSharper disable once UnusedType.Global
 public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
 {
     private const string CustomUniqueArtMappingPath = "uniqueArtMapping.json";
+    private const string CoroutineName = $"Coroutine-{nameof(UniqueFinder)}";
 
     private Dictionary<string, List<string>> _mapping = new();
-    private readonly Stopwatch _timer = Stopwatch.StartNew();
     private readonly Stopwatch _blinkTimer = Stopwatch.StartNew();
     private HashSet<GroundItemInstance> _filteredLabelsOnGround = [];
     private readonly Vector2 _borederOffset = new(-1, 1);
     private bool _blinkTrigger;
+    private static readonly WaitTime Wait1Sec = new(1000);
 
     private Element? LargeMap => GameController?.IngameState?.IngameUi?.Map?.LargeMap;
     private IngameUIElements? InGameUi => GameController?.Game?.IngameState?.IngameUi;
@@ -91,37 +95,41 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
             Settings.UniqueNames.Add("Headhunter");
         }
 
+        Core.ParallelRunner.Run(ParseThread(), this, CoroutineName);
+
         return true;
     }
 
-    public override Job Tick()
+    private IEnumerator ParseThread()
     {
-        if (_timer.ElapsedMilliseconds <= Settings.Common.UpdateTime) return base.Tick();
-        if (LabelsOnGround.Count == 0) return base.Tick();
-        if (GameController?.Files is null) return base.Tick();
-
-        var newFilteredLabelsOnGround = new HashSet<GroundItemInstance>();
-        foreach (var labelOnGround in LabelsOnGround)
+        while (true)
         {
-            labelOnGround.ItemOnGround.TryGetComponent<WorldItem>(out var worldItem);
-            if (worldItem is null) continue;
-            worldItem.ItemEntity.TryGetComponent<Mods>(out var itemMods);
-            if (itemMods is null) continue;
-            if (itemMods.ItemRarity != ItemRarity.Unique) continue;
-            if (Settings.Common.HideIdentified && itemMods.Identified) continue;
-            worldItem.ItemEntity.TryGetComponent<RenderItem>(out var renderItem);
-            if (renderItem is null) continue;
-            var itemName = Mapping().GetValueOrDefault(renderItem.ResourcePath)?.Where(i => !i.StartsWith("Replica")).FirstOrDefault();
-            if (itemName is null) continue;
-            var namesCopy = new List<string>(Settings.UniqueNames.Where(n => n.Trim().Length > 0));
-            if (!namesCopy.Any(n => itemName.Contains(n, StringComparison.OrdinalIgnoreCase))) continue;
-            newFilteredLabelsOnGround.Add(new GroundItemInstance(labelOnGround, worldItem, itemMods, renderItem, itemName, GameController));
+            if (LabelsOnGround.Count == 0) yield return Wait1Sec;
+            if (GameController?.Files is null) yield return Wait1Sec;
+
+            var newFilteredLabelsOnGround = new HashSet<GroundItemInstance>();
+            foreach (var labelOnGround in LabelsOnGround)
+            {
+                labelOnGround.ItemOnGround.TryGetComponent<WorldItem>(out var worldItem);
+                if (worldItem is null) continue;
+                worldItem.ItemEntity.TryGetComponent<Mods>(out var itemMods);
+                if (itemMods is null) continue;
+                if (itemMods.ItemRarity != ItemRarity.Unique) continue;
+                if (Settings.Common.HideIdentified && itemMods.Identified) continue;
+                worldItem.ItemEntity.TryGetComponent<RenderItem>(out var renderItem);
+                if (renderItem is null) continue;
+                var itemName = Mapping().GetValueOrDefault(renderItem.ResourcePath)?.Where(i => !i.StartsWith("Replica")).FirstOrDefault();
+                if (itemName is null) continue;
+                var namesCopy = new List<string>(Settings.UniqueNames.Where(n => n.Trim().Length > 0));
+                if (!namesCopy.Any(n => itemName.Contains(n, StringComparison.OrdinalIgnoreCase))) continue;
+                newFilteredLabelsOnGround.Add(new GroundItemInstance(labelOnGround, worldItem, itemMods, renderItem, itemName, GameController!));
+            }
+
+            _filteredLabelsOnGround = newFilteredLabelsOnGround;
+
+            yield return Wait1Sec;
         }
-
-        _filteredLabelsOnGround = newFilteredLabelsOnGround;
-
-        _timer.Restart();
-        return base.Tick();
+        // ReSharper disable once IteratorNeverReturns
     }
 
     public override void Render()
