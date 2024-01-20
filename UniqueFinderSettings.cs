@@ -49,8 +49,8 @@ public class Panel
     public ToggleNode Enabled { get; set; } = new(true);
     public ToggleNode Blink { get; set; } = new(true);
     public RangeNode<int> TextSize { get; set; } = new(2, 1, 20);
-    public RangeNode<int> Margin { get; set; } = new(20, 0, 200);
-    public ToggleNode AlignLeft { get; set; } = new(false);
+    public RangeNode<int> Margin { get; set; } = new(20, 0, 500);
+    public ListNode PanelAlign { get; set; } = new() { Values = Enum.GetNames(typeof(EPanelAlign)).ToList(), Value = EPanelAlign.Right.ToString() };
 }
 
 [Submenu(CollapsedByDefault = true)]

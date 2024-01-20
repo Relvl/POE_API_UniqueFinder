@@ -1,6 +1,5 @@
 ﻿using System.Collections;
 using System.Diagnostics;
-using System.Reflection;
 using ExileCore;
 using ExileCore.PoEMemory;
 using ExileCore.PoEMemory.Components;
@@ -8,94 +7,41 @@ using ExileCore.PoEMemory.Elements;
 using ExileCore.PoEMemory.MemoryObjects;
 using ExileCore.Shared;
 using ExileCore.Shared.Enums;
-using ExileCore.Shared.Helpers;
 using ImGuiNET;
-using Newtonsoft.Json;
-using SharpDX;
-using Vector2 = System.Numerics.Vector2;
 
 namespace UniqueFinder;
 
 // ReSharper disable once UnusedType.Global
+// ReSharper disable once ClassNeverInstantiated.Global
 public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
 {
-    private const string CustomUniqueArtMappingPath = "uniqueArtMapping.json";
-    private const string CoroutineName = $"Coroutine-{nameof(UniqueFinder)}";
-
-    private Dictionary<string, List<string>> _mapping = new();
     private readonly Stopwatch _blinkTimer = Stopwatch.StartNew();
     private HashSet<GroundItemInstance> _filteredLabelsOnGround = [];
-    private readonly Vector2 _borederOffset = new(-1, 1);
     private bool _blinkTrigger;
     private static readonly WaitTime Wait1Sec = new(1000);
+    private readonly PanelRenderer _panelRenderer;
+
+    public UniqueFinder()
+    {
+        _panelRenderer = new PanelRenderer(this);
+    }
 
     private Element? LargeMap => GameController?.IngameState?.IngameUi?.Map?.LargeMap;
     private IngameUIElements? InGameUi => GameController?.Game?.IngameState?.IngameUi;
     private List<LabelOnGround> LabelsOnGround => GameController?.Game?.IngameState?.IngameUi?.ItemsOnGroundLabels?.ToList() ?? [];
 
-    private Dictionary<string, List<string>> Mapping()
-    {
-        if (_mapping.Count == 0)
-        {
-            var customFilePath = Path.Join(DirectoryFullName, CustomUniqueArtMappingPath);
-            if (File.Exists(customFilePath))
-            {
-                DebugWindow.LogMsg($"UniqueFinder: Read {CustomUniqueArtMappingPath} from file system");
-                ReadMapping(File.ReadAllText(customFilePath));
-            }
-            else
-            {
-                try
-                {
-                    using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"UniqueFinder.{CustomUniqueArtMappingPath}");
-                    if (stream is null)
-                    {
-                        LogError($"UniqueFinder: Assembly {CustomUniqueArtMappingPath} stream is null");
-                        _mapping = new Dictionary<string, List<string>>();
-                        return _mapping;
-                    }
-
-                    LogMsg($"UniqueFinder: Read {CustomUniqueArtMappingPath} from assembly...");
-                    using var reader = new StreamReader(stream);
-                    var content = reader.ReadToEnd();
-                    ReadMapping(content);
-                    File.WriteAllText(customFilePath, content);
-                }
-                catch (Exception ex)
-                {
-                    LogError($"UniqueFinder: Unable to load embedded art mapping: {ex}");
-                    _mapping = new Dictionary<string, List<string>>();
-                    return _mapping;
-                }
-            }
-        }
-
-        return _mapping;
-    }
-
-    private void ReadMapping(string source)
-    {
-        try
-        {
-            _mapping = JsonConvert.DeserializeObject<Dictionary<string, List<string>>>(source) ?? new Dictionary<string, List<string>>();
-        }
-        catch (Exception ex)
-        {
-            LogError($"UniqueFinder: Unable to load art mapping: {ex}");
-        }
-    }
 
     public override bool Initialise()
     {
         GameController.UnderPanel.WantUse(() => Settings.Enable);
-        Mapping();
+        UniqueArtMapping.Mapping(this);
         if (Settings.UniqueNames.Count == 0 && !Settings.Initialized)
         {
             Settings.UniqueNames.Add("Mageblood");
             Settings.UniqueNames.Add("Headhunter");
         }
 
-        Core.ParallelRunner.Run(ParseThread(), this, CoroutineName);
+        Core.ParallelRunner.Run(ParseThread(), this, $"Coroutine-{nameof(UniqueFinder)}");
 
         return true;
     }
@@ -118,7 +64,7 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
                 if (Settings.Common.HideIdentified && itemMods.Identified) continue;
                 worldItem.ItemEntity.TryGetComponent<RenderItem>(out var renderItem);
                 if (renderItem is null) continue;
-                var itemName = Mapping().GetValueOrDefault(renderItem.ResourcePath)?.Where(i => !i.StartsWith("Replica")).FirstOrDefault();
+                var itemName = UniqueArtMapping.Mapping(this).GetValueOrDefault(renderItem.ResourcePath)?.FirstOrDefault();
                 if (itemName is null) continue;
                 var namesCopy = new List<string>(Settings.UniqueNames.Where(n => n.Trim().Length > 0));
                 if (!namesCopy.Any(n => itemName.Contains(n, StringComparison.OrdinalIgnoreCase))) continue;
@@ -147,24 +93,11 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
         var summary = _filteredLabelsOnGround.OrderBy(i => i.Distance).ToList();
         if (summary.Count <= 0) return;
 
-        var panelPosition = GameController.UnderPanel.StartDrawPoint.ToVector2Num();
-        var align = Settings.Panel.AlignLeft ? FontAlign.Left : FontAlign.Right;
-        if (panelPosition.X <= 0) align = FontAlign.Left;
-
-
-        if (align == FontAlign.Left)
-            panelPosition = new Vector2(Settings.Panel.Margin, 200);
-        else
-            panelPosition.X -= Settings.Panel.Margin;
+        if (!Settings.Panel.Blink || _blinkTrigger)
+            _panelRenderer.Render(summary);
 
         foreach (var item in summary)
         {
-            if (Settings.Panel.Enabled && (!Settings.Panel.Blink || _blinkTrigger) && InGameUi?.OpenRightPanel.IsVisible != true)
-            {
-                var height = DrawItemIncremented(panelPosition, item, align);
-                panelPosition.Y += height;
-            }
-
             if (Settings.LargeMap.Trace && (!Settings.LargeMap.Blink || _blinkTrigger) && LargeMap is not null && LargeMap.IsVisible)
             {
                 var itemLocation = GameController.IngameState.Data.GetGridMapScreenPosition(item.Location);
@@ -184,36 +117,11 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
         base.Render();
     }
 
-    private float DrawItemIncremented(Vector2 position, GroundItemInstance item, FontAlign align = FontAlign.Right)
-    {
-        position += _borederOffset;
-        var baseTextSize = Graphics.MeasureText(item.ItemName);
-        var textSize = baseTextSize * Settings.Panel.TextSize;
-        var fullWidth = textSize.X + 10 * Settings.Panel.TextSize;
-        var textHeightWithPadding = textSize.Y + 4;
-
-        position.X = align == FontAlign.Left ? position.X : position.X - fullWidth;
-
-        var boxRect = new RectangleF(position.X, position.Y, fullWidth, textHeightWithPadding);
-        Graphics.DrawBox(boxRect, item.BackgroundColor);
-
-        // Borders
-        var frameRect = boxRect;
-        frameRect.Inflate(1, 1);
-        Graphics.DrawFrame(frameRect, item.BorderColor, 1);
-
-        using (Graphics.SetTextScale(Settings.Panel.TextSize))
-        {
-            var textPos = position + new Vector2(align == FontAlign.Right ? -5 + fullWidth : 5, textHeightWithPadding / 2 - textSize.Y / 2);
-            Graphics.DrawText(item.ItemName, textPos, item.TextColor, align);
-        }
-
-        return textHeightWithPadding + 1;
-    }
-
     public override void DrawSettings()
     {
-        ImGui.Text("Unique names:");
+        ImGui.Text($"Unique names ({UniqueArtMapping.Mapping(this).Count} loaded):");
+        if (ImGui.IsItemHovered())
+            ImGui.SetItemTooltip("If there is no any unique art loaded - something went wrong, and plugin won't work!");
 
         ImGui.Indent();
         for (var i = 0; i < Settings.UniqueNames.Count; i++)
@@ -242,8 +150,6 @@ public class UniqueFinder : BaseSettingsPlugin<UniqueFinderSettings>
         ImGui.Spacing();
         ImGui.Spacing();
         ImGui.Spacing();
-
-        ImGui.Text($"Unique map loaded: {Mapping().Count}");
 
         base.DrawSettings();
     }

@@ -5,7 +5,6 @@ using ExileCore.PoEMemory.Elements;
 using ExileCore.PoEMemory.MemoryObjects;
 using ExileCore.Shared.Helpers;
 using SharpDX;
-using Point = System.Drawing.Point;
 using Vector2 = System.Numerics.Vector2;
 
 namespace UniqueFinder;
